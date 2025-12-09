@@ -5,11 +5,26 @@ import { SharedRoutingModule } from './shared-routing.module';
 import { ModalCommonComponent } from './components/modal-common/modal-common.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { MaskValueComponent } from './components/mask-value/mask-value.component';
+import { StrongPasswordInputComponent } from './components/strong-password-input/strong-password-input.component';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { CustomOptionComponent } from './components/custom-option/custom-option.component';
+import { CustomSelectComponent } from './components/custom-select/custom-select.component';
+import { ResetPasswordModuleComponent } from './components/reset-password-modal/reset-password-modal.component';
+import { ModalConditionComponent } from './components/modal-condition/modal-condition.component';
+import { NumericDirective } from './directive/numeric.directive';
+import { PreventSpaceDirective } from './directive/preventspace.directive';
 
 const components = [
   ModalCommonComponent,
   ProfileComponent,
-  MaskValueComponent
+  MaskValueComponent,
+  StrongPasswordInputComponent,
+  CustomOptionComponent,
+  CustomSelectComponent,
+  ResetPasswordModuleComponent,
+  ModalConditionComponent,
+  NumericDirective,
+  PreventSpaceDirective
 ];
 
 @NgModule({
@@ -18,7 +33,9 @@ const components = [
   ],
   imports: [
     CommonModule,
-    SharedRoutingModule
+    SharedRoutingModule,
+    FormsModule,
+    ReactiveFormsModule
   ],
   exports: [
     ...components,
