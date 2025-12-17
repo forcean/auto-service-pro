@@ -9,12 +9,11 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send notification to Discord
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DISCORD_MESSAGE: |
-            🚀 **New push to DEVELOP branch**
-            👤 Author: ${{ github.actor }}
-            📝 Commit: ${{ github.event.head_commit.message }}
-            🔗 Repo: ${{ github.repository }}
+      - name: Send Discord notification
+        run: |
+          curl -H "Content-Type: application/json" \
+          -d '{
+            "username": "DEV - Notification",
+            "content": "🚀 **New push to DEVELOP branch**\n👤 Author: ${{ github.actor }}\n📝 Commit: ${{ github.event.head_commit.message }}\n🔗 Repo: ${{ github.repository }}"
+          }' \
+          ${{ secrets.DISCORD_WEBHOOK }}
