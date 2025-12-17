@@ -1,5 +1,15 @@
 <div
-  class="flex h-screen overflow-hidden bg-gradient-to-r from-cyan-50/50 to-lime-50/50">
+  class="flex h-screen overflow-hidden
+         bg-gradient-to-br
+         from-[#0f172a]
+         via-[#0b1220]
+         to-black
+         relative">
+  <div
+    class="pointer-events-none absolute inset-0
+           bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.06),_transparent_60%)]">
+  </div>
+
   <div
     *ngIf="isSidebarOverlayOpen"
     class="sidebar-backdrop fixed inset-0 bg-black/40 z-30"></div>

@@ -4,7 +4,8 @@ import { Injectable } from '@angular/core';
 import { ApiPrefix } from '../enum/api-prefix.enum';
 import { IResponseMenu } from '../interface/sidebar.interface';
 import { IBaseResponse } from '../interface/base-http.interface';
-import { IQueryListUser, IReqCreateUser, IReqUpdateUser, IUserResultData } from '../interface/user-management.interface';
+import { IReqCreateUser, IReqUpdateUser, IResponseUserDetail } from '../interface/user-management.interface';
+import { IQueryListUser, IUserResultData } from '../interface/table-user-management.interface';
 
 @Injectable({
   providedIn: 'root'
@@ -19,7 +20,7 @@ export class UserManagementService {
 
   async getListUser(params: IQueryListUser): Promise<IBaseResponse<IUserResultData>> {
     try {
-      const uri = this.PREFIX_USER + `/user-management/admin/users`;
+      const uri = this.PREFIX_USER + `/users`;
       const response = await this.httpService.get<IUserResultData>(uri, params);
       return response;
     } catch (error) {
@@ -31,14 +32,14 @@ export class UserManagementService {
     }
   }
 
-  async getUserDetail(params: IQueryListUser): Promise<IBaseResponse<IUserResultData>> {
+  async getUserDetail(userId: string | null): Promise<IBaseResponse<IResponseUserDetail>> {
     try {
-      const uri = this.PREFIX_USER + `/admin/senderNames`;
-      const response = await this.httpService.get<IUserResultData>(uri, params);
+      const uri = this.PREFIX_USER + `/users/${userId}`;
+      const response = await this.httpService.get<IResponseUserDetail>(uri);
       return response;
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.error) {
-        return error.error as IBaseResponse<IUserResultData>;
+        return error.error as IBaseResponse<IResponseUserDetail>;
       } else {
         throw error;
       }

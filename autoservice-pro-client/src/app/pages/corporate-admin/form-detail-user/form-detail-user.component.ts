@@ -1,13 +1,14 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ModalCommonService } from '../../../shared/components/modal-common/modal-common.service';
 import { UserManagementService } from '../../../shared/services/user-management.service';
 import { RESPONSE } from '../../../shared/enum/response.enum';
 import { ModalConditionComponent } from '../../../shared/components/modal-condition/modal-condition.component';
 import { ModalConditionService } from '../../../shared/components/modal-condition/modal-condition.service';
-import { IReqUpdateUser, IUser } from '../../../shared/interface/user-management.interface';
+import { IReqUpdateUser } from '../../../shared/interface/user-management.interface';
 import { Subscription } from 'rxjs';
+import { UserList } from '../../../shared/interface/table-user-management.interface';
 
 
 @Component({
@@ -20,8 +21,8 @@ export class FormDetailUserComponent implements OnInit {
 
   private modalSubscription: Subscription | null = null;
   form!: FormGroup;
-  userData!: IUser;
-  managerList: IUser[] = [];
+  userData!: any;
+  managerList: UserList[] = [];
 
   mustSelectManager = false;
   isEditMode = false;
@@ -35,6 +36,7 @@ export class FormDetailUserComponent implements OnInit {
     private fb: FormBuilder,
     private router: Router,
     private modalCommonService: ModalCommonService,
+    private route: ActivatedRoute,
     private userManagementService: UserManagementService,
     private modalConditionService: ModalConditionService
   ) { }
@@ -42,15 +44,7 @@ export class FormDetailUserComponent implements OnInit {
   @ViewChild(ModalConditionComponent) modalConditionComponent!: ModalConditionComponent;
 
   ngOnInit(): void {
-    const nav = history.state;
-    this.userData = nav.user;
-
-    // if (!this.userData) {
-    //   this.router.navigate(['/portal/corporate-admin/account']);
-    //   return;
-    // }
-
-    this.createForm();
+    this.getUserData();
     this.loadManagerList();
   }
 
@@ -72,6 +66,27 @@ export class FormDetailUserComponent implements OnInit {
   //   }
   // }
 
+  private async getUserData() {
+    const userId = this.route.snapshot.paramMap.get('id');
+    if (!userId) {
+      this.router.navigate(['/portal/corporate-admin/account']);
+      return;
+    }
+    try {
+      const res = await this.userManagementService.getUserDetail(userId);
+      if (res.resultCode == RESPONSE.SUCCESS) {
+        this.userData = res.resultData;
+        this.createForm();
+      } else {
+        this.createForm();
+        this.handleCommonError();
+      }
+    } catch (error) {
+      console.error('Error fetching user data', error);
+
+    }
+  }
+
   createForm() {
     this.form = this.fb.group({
       username: [{ value: this.userData.publicId, disabled: true }],
@@ -82,7 +97,6 @@ export class FormDetailUserComponent implements OnInit {
       role: [{ value: this.userData.role, disabled: true }, Validators.required],
       managerId: [{ value: this.userData.managerId || '', disabled: true }]
     });
-
     this.onRoleChange();
   }
 
@@ -126,9 +140,9 @@ export class FormDetailUserComponent implements OnInit {
       //   this.handleCommonError();
       // }
       this.managerList = [
-        { id: '1', publicId: 'manager1', firstName: 'สมชาย', lastName: 'ใจดี', email: '', role: 'MNG', phoneNumber: '', managerId: '', createdDt: '' },
-        { id: '2', publicId: 'manager2', firstName: 'สมหญิง', lastName: 'แสนสวย', email: '', role: 'MNG', phoneNumber: '', managerId: '', createdDt: '' },
-        { id: '3', publicId: 'manager3', firstName: 'สมปอง', lastName: 'รวยรวย', email: '', role: 'MNG', phoneNumber: '', managerId: '', createdDt: '' },
+        { id: '1', publicId: 'manager1', firstName: 'สมชาย', lastName: 'ใจดี', role: 'MNG', managerName: null, phoneNumber: '0812345678', activeFlag: true, lastAccess: null },
+        { id: '2', publicId: 'manager2', firstName: 'สมหญิง', lastName: 'แสนสวย', role: 'MNG', managerName: null, phoneNumber: '0898765432', activeFlag: true, lastAccess: null },
+        { id: '3', publicId: 'manager3', firstName: 'สมปอง', lastName: 'หัวไว', role: 'MNG', managerName: null, phoneNumber: '0823456789', activeFlag: false, lastAccess: null }
       ];
     } catch (err) {
       console.error('Error loading manager list', err);
@@ -229,7 +243,6 @@ export class FormDetailUserComponent implements OnInit {
   }
 
   onDelete() {
-    // this.userId = event;
     this.handleModalDelete();
   }
 
