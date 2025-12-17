@@ -1,7 +1,11 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { ObjectId } from "typeorm";
 
 @Schema({ collection: 'users' })
 export class UsersEntity {
+  @Prop({ type: String })
+  id: string;
+
   @Prop({ type: String})
   publicId: string;
 
@@ -10,6 +14,9 @@ export class UsersEntity {
 
   @Prop({ type: String })
   email: string;
+
+  @Prop({ type: String })
+  phoneNumber: string;
 
   @Prop({ type: String })
   firstname: string;
@@ -33,7 +40,16 @@ export class UsersEntity {
   permissions: string[];
 
   @Prop({ type: String })
-  parent: string;
+  managerId?: string;
+
+  @Prop({ type: Date })
+  updatedDt?: Date;
+
+  @Prop({ type: String })
+  updatedBy?: string;
+
+  @Prop({ type: Date })
+  lastAccessDt?: Date;
 }
 
 export const UsersSchema = SchemaFactory.createForClass(UsersEntity);

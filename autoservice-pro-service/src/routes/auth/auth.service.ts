@@ -1,12 +1,13 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { LoginDto, registerDto } from './auth.dto';
+import { LoginDto } from './auth.dto';
 import { UsersRepository } from 'src/repository/users/users.repository';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import { refreshTokenDto } from './token.dto';
 import { TokenRepository } from 'src/repository/token/token.repository';
 import { PoliciesRepository } from 'src/repository/permissions/policies.repository';
+import { BusinessException } from 'src/common/exceptions/business.exception';
 
 @Injectable()
 export class AuthService {
@@ -28,23 +29,28 @@ export class AuthService {
       const getUser = await this.usersRepository.getUserByPublicId(loginDto.publicId);
 
       if (!getUser) {
-        throw new Error('User not found');
+        throw new BusinessException(4040, 'User not found');
       }
 
       const checkPassword = await bcrypt.compare(loginDto.painTextPassword, getUser.credentialId);
       // const checkPassword = loginDto.painTextPassword === getUser.credentialId;
       if (!checkPassword) {
-        throw new Error('Invalid password');
+        throw new BusinessException(4010,'Invalid password');
       }
 
       if (!secret || !refreshSecret) {
-        throw new Error('JWT secrets are not defined');
+        throw new BusinessException(4012, 'JWT secrets are not defined');
       }
 
       const accessToken = jwt.sign({ publicId: getUser.publicId, role: getUser.role }, secret, { expiresIn: '1h' });
       const refreshToken = jwt.sign({ publicId: getUser.publicId }, refreshSecret, { expiresIn: '7d' });
       const accessTokenExpiresDt = Date.now() + this.tokenExpire * 1000;
       const refreshTokenExpiresDt = Date.now() + this.refreshTokenExpire * 1000;
+
+      const insertLastLogin = await this.usersRepository.updateLastLogin(getUser.publicId);
+      if (!insertLastLogin) {
+        throw new BusinessException(4011, 'Failed to update last login');
+      }
 
       const insertToken = await this.tokenRepository.insertToken({
         publicId: getUser.publicId,
@@ -57,70 +63,18 @@ export class AuthService {
       })
 
       if (!insertToken) {
-        throw new Error('Failed to insert token');
+        throw new BusinessException(4011, 'Failed to insert token');
       }
 
       return {
-        accessToken,
-        refreshToken,
+        accessToken: accessToken,
+        refreshToken: refreshToken,
         accessTokenExpiresDt: new Date(accessTokenExpiresDt).toISOString(),
         refreshTokenExpiresDt: new Date(refreshTokenExpiresDt).toISOString()
-      };
+      }
     } catch (error) {
-      throw new Error(`Login failed: ${error.message}`);
-    }
-  }
-
-  async register(registerDto: registerDto, token: string) {
-    try {
-      const secret = this.configService.get<string>('JWT_SECRET');
-      if (!secret) {
-        throw new Error('JWT secret not defined');
-      }
-
-      const decodedToken = jwt.verify(token, secret) as jwt.JwtPayload;
-      const isUserExist = await this.usersRepository.getUserByPublicId(registerDto.publicId);
-      if (isUserExist) {
-        throw new Error('User already exists');
-      }
-
-      const hashedPassword = await bcrypt.hash(registerDto.painTextPassword, 10);
-
-      const getPermissions = await this.policiesRepository.getPermissionsByRole(registerDto.role);
-      if (!getPermissions?.length) {
-        throw new Error('Permisson does not exist on role in policies');
-      }
-
-      const createUser = await this.usersRepository.createUser(registerDto, hashedPassword, decodedToken.publicId, getPermissions);
-      if (!createUser) {
-        throw new Error('Failed to create user');
-      }
-
-    } catch (error) {
-      throw new Error(`Register failed: ${error.message}`);
-    }
-  }
-
-  //เช็ค logic กับชื่อ function ตั้งใหม่ให้ดี
-  async createSysOwner(registerDto: registerDto, privateKey: string) {
-    try {
-      const isUserExist = await this.usersRepository.getUserByPublicId(registerDto.publicId);
-      if (isUserExist) {
-        throw new Error('User already exists');
-      }
-
-      if (privateKey !== 'AUTOSERVICE_SYS_OWNER_CREATE_KEY_10112024') {
-        throw new Error('Invalid private key for sys owner creation');
-      }
-
-      const hashedPassword = await bcrypt.hash(registerDto.painTextPassword, 10);
-      const createUserSysOwner = await this.usersRepository.createUserSysOwner(registerDto, hashedPassword);
-      if (!createUserSysOwner) {
-        throw new Error('Failed to create user');
-      }
-
-    } catch (error) {
-      throw new Error(`Register failed: ${error.message}`);
+      console.log(`Login failed: ${error.message}`);
+      throw error;
     }
   }
 
@@ -128,14 +82,14 @@ export class AuthService {
     try {
       const secret = this.configService.get<string>('JWT_SECRET');
       if (!secret) {
-        throw new Error('JWT secret not defined');
+        throw new BusinessException(4012, 'JWT secret not defined');
       }
 
       const decodedToken = jwt.verify(refreshTokenDto.accessToken, secret) as jwt.JwtPayload;
       const getToken = await this.tokenRepository.getToken(refreshTokenDto, decodedToken.publicId);
 
       if (!getToken) {
-        throw new Error('Token not found');
+        throw new BusinessException(4041, 'Token not found');
       }
 
       const newAccessToken = jwt.sign({ publicId: decodedToken.publicId, role: decodedToken.role }, secret, { expiresIn: '1h' });
@@ -153,7 +107,7 @@ export class AuthService {
       if (insertToken) {
         await this.tokenRepository.deleteOldToken(getToken.publicId, getToken.accessToken, getToken.refreshToken);
       } else {
-        throw new Error('Failed to insert new access token');
+        throw new BusinessException(4011, 'Failed to insert new access token');
       }
 
       return {
@@ -164,7 +118,8 @@ export class AuthService {
       };
 
     } catch (error) {
-      throw new Error(`Create new refresh token failed: ${error.message}`);
+      console.log(`Create new refresh token failed: ${error.message}`);
+      throw error;
     }
   }
 
