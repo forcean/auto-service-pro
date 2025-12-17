@@ -9,11 +9,33 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send Discord notification
+      - name: Send Discord Embed Notification
         run: |
+          COMMIT_COUNT=$(jq '.commits | length' "$GITHUB_EVENT_PATH")
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+
           curl -H "Content-Type: application/json" \
-          -d '{
-            "username": "DEV - Notification",
-            "content": "🚀 **New push to DEVELOP branch**\n👤 Author: ${{ github.actor }}\n📝 Commit: ${{ github.event.head_commit.message }}\n🔗 Repo: ${{ github.repository }}"
-          }' \
+          -d "{
+            \"username\": \"DEV - Notification\",
+            \"embeds\": [{
+              \"title\": \"🚀 Develop Branch Updated\",
+              \"url\": \"${COMMIT_URL}\",
+              \"color\": 3447003,
+              \"fields\": [
+                { \"name\": \"📦 Repository\", \"value\": \"${{ github.repository }}\", \"inline\": true },
+                { \"name\": \"🌿 Branch\", \"value\": \"develop\", \"inline\": true },
+                { \"name\": \"👤 Author\", \"value\": \"${{ github.actor }}\", \"inline\": true },
+
+                { \"name\": \"📝 Commit Message\", \"value\": \"${{ github.event.head_commit.message }}\" },
+
+                { \"name\": \"🔢 Commits in Push\", \"value\": \"${COMMIT_COUNT}\", \"inline\": true },
+                { \"name\": \"🔗 Commit SHA\", \"value\": \"[\`${SHORT_SHA}\`](${COMMIT_URL})\", \"inline\": true }
+              ],
+              \"footer\": {
+                \"text\": \"GitHub → Discord | Develop Branch\"
+              },
+              \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+            }]
+          }" \
           ${{ secrets.DISCORD_WEBHOOK }}
