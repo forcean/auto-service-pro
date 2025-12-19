@@ -131,8 +131,8 @@ export class UserManageService {
         users: mappedData.map((user) => ({
           id: user._id,
           publicId: user.publicId,
-          firstName: user.firstname,
-          lastName: user.lastname,
+          firstname: user.firstname,
+          lastname: user.lastname,
           email: user.email,
           phoneNumber: user.phoneNumber,
           role: user.role,
@@ -148,14 +148,14 @@ export class UserManageService {
     }
   }
 
-  async updateUserByPublicId(data: updateUserDto, updateBy: string, publicId: string) {
+  async updateUserByUserId(data: updateUserDto, updateBy: string, userId: string) {
     try {
-      const isUserExist = await this.usersRepository.getUserByPublicId(publicId);
+      const isUserExist = await this.usersRepository.getUserById(userId);
       if (!isUserExist) {
         throw new BusinessException('4040', 'User does not exist');
       }
       //มาเขียนเพิ่มเรื่องเช็คอีเมลว่าที่เปลี่ยนมีซ้ำกับคนอื่นไหมยกเว้นเขียนอันเดิมตัวเอง
-      const updateUser = await this.usersRepository.updateUserByPublicId(data, updateBy, publicId);
+      const updateUser = await this.usersRepository.updateUserByUserId(data, updateBy, userId);
       if (!updateUser) {
         throw new BusinessException('4011', 'Failed to update user');
       }
@@ -176,8 +176,8 @@ export class UserManageService {
         publicId: user.publicId,
         email: user.email,
         phoneNumber: user.phoneNumber,
-        firstName: user.firstname,
-        lastName: user.lastname,
+        firstname: user.firstname,
+        lastname: user.lastname,
         activeFlag: user.activeFlag,
         createdDt: user.createdDt,
         createdBy: user.createdBy,
