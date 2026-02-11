@@ -10,24 +10,17 @@ import { PaginationQuery } from 'src/common/dto/pagination.dto';
 import { getPagination } from 'src/common/utils/pagination.util';
 import { AuthUser } from 'src/types/user.type';
 import { BusinessException } from 'src/common/exceptions/business.exception';
-import { log } from 'console';
 
 @Injectable()
 export class UserManageService {
   constructor(
-    private configService: ConfigService,
     @Inject(PoliciesRepository) private readonly policiesRepository: PoliciesRepository,
     @Inject(UsersRepository) private readonly usersRepository: UsersRepository,
   ) { }
-
-  async register(registerDto: registerDto, token: string) {
+//แก้เอา authUser ทำ
+  async register(registerDto: registerDto, authUser: AuthUser) {
     try {
-      const secret = this.configService.get<string>('JWT_SECRET');
-      if (!secret) {
-        throw new BusinessException('4012', 'JWT secret not defined');
-      }
-
-      const decodedToken = jwt.verify(token, secret) as jwt.JwtPayload;
+      
       const isUserExist = await this.usersRepository.getUserByPublicId(registerDto.publicId);
       if (isUserExist) {
         throw new BusinessException('4090', 'User already exists');
@@ -40,8 +33,8 @@ export class UserManageService {
         throw new BusinessException('4031', 'Permisson does not exist on role in policies');
       }
 
-      if (decodedToken.role == 'ADM' || decodedToken.role == 'SO') {
-        const createUser = await this.usersRepository.createUser(registerDto, hashedPassword, decodedToken.publicId, getPermissions);
+      if (authUser.role == 'ADM' || authUser.role == 'SO') {
+        const createUser = await this.usersRepository.createUser(registerDto, hashedPassword, authUser.publicId, getPermissions);
         if (!createUser) {
           throw new BusinessException('4011', 'Failed to create user');
         }
@@ -50,7 +43,7 @@ export class UserManageService {
       }
 
     } catch (error) {
-      console.log('Error creating user: ${error.message}');
+      console.log(`Error creating user: ${error.message}`);
       throw error;
     }
   }
@@ -78,7 +71,7 @@ export class UserManageService {
       }
 
     } catch (error) {
-      console.log('Failed to create system owner: ${error.message}');
+      console.log(`Failed to create system owner: ${error.message}`);
       throw error;
     }
   }
@@ -206,7 +199,7 @@ export class UserManageService {
       const user = await this.usersRepository.getUserById(userId);
       if (!user || user.activeFlag === false) {
         throw new BusinessException('4040', 'User does not exist or inactive');
-      } //อาจเพิ่มเช็คเรื่อง Permissiom
+      }
 
       const hashedNewPassword = await bcrypt.hash(newPainTextPassword, 10);
       const resetPassword = await this.usersRepository.resetPassword(hashedNewPassword, authUser.publicId, userId);
@@ -216,6 +209,35 @@ export class UserManageService {
 
     } catch (error) {
       console.log(`Reset password failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async updateUserPermissions(authUser: AuthUser) {
+    try {
+      const getPermissions = await this.policiesRepository.getPermissionsByRole(authUser.role);
+      if (!getPermissions?.length) {
+        throw new BusinessException('4031', 'Permisson does not exist on role in policies');
+      }
+      const updatePermissions = await this.usersRepository.updateUserPermissions(authUser.publicId, getPermissions);
+      if (!updatePermissions) {
+        throw new BusinessException('4011', 'Failed to update user permission');
+      }
+    } catch (error) {
+      console.log(`Update user permission failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getUserPermissions(authUser: AuthUser) {
+    try {
+      const getPermissions = await this.usersRepository.getUserByPublicId(authUser.publicId);
+      if (!getPermissions) {
+        throw new BusinessException('4040', 'User does not exist');
+      }
+      return { permissions: getPermissions.permissions };
+    } catch (error) {
+      console.log(`Get user permission failed: ${error.message}`);
       throw error;
     }
   }
