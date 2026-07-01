@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   createProductDto,
+  stockRequestDto,
   getProductCategoriesDto,
   getProductListDto,
   updateProductDto,
@@ -16,6 +17,10 @@ import { VehicleBrandsRepository } from 'src/repository/vehicle-brands/vehicle-b
 import { VehicleModelsRepository } from 'src/repository/vehicle-models/vehicle-models.repository';
 import { PaginationQuery } from 'src/common/dto/pagination.dto';
 import { getPagination } from 'src/common/utils/pagination.util';
+import { IProductDetailResponse } from './interfaces/products.interface';
+import { StockManagementService } from '../stock-management/stock-management.service';
+import { CreateStockDto } from '../stock-management/dtos/stock-management.dto';
+import { Types } from 'mongoose';
 
 @Injectable()
 export class ProductsService {
@@ -34,10 +39,14 @@ export class ProductsService {
     private readonly vehicleBrandsRepository: VehicleBrandsRepository,
     @Inject(VehicleModelsRepository)
     private readonly vehicleModelsRepository: VehicleModelsRepository,
+    @Inject(StockManagementService)
+    private readonly stockManagementService: StockManagementService,
   ) {}
 
   async createProduct(dto: createProductDto, authUser: AuthUser) {
+    const session = await this.productsRepository.startSession();
     try {
+      session.startTransaction();
       if (authUser.role !== 'ADM' && authUser.role !== 'SO') {
         throw new BusinessException(
           '4030',
@@ -93,23 +102,44 @@ export class ProductsService {
         sku,
         dto,
         authUser,
+        session,
       );
 
       if (!createProduct) {
         throw new BusinessException('4012', 'Failed to create product');
       }
+
+      if (dto.stockInfo) {
+        const res = this.buildCreateStock(dto.stockInfo, createProduct.id, sku);
+        const stocked = await this.stockManagementService.createStock(
+          res,
+          authUser,
+          session,
+        );
+        if (!stocked) {
+          throw new BusinessException('4012', 'Failed to create stock');
+        }
+      }
+      await session.commitTransaction();
+      return createProduct;
     } catch (error) {
+      await session.abortTransaction();
       console.error(
         `Error creating product: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       throw error;
+    } finally {
+      await session.endSession();
     }
   }
 
   async deleteProduct(skuId: string, authUser: AuthUser) {
     try {
       if (authUser.role !== 'ADM' && authUser.role !== 'SO') {
-        throw new BusinessException('4030', 'Only system owner or admin can delete product');
+        throw new BusinessException(
+          '4030',
+          'Only system owner or admin can delete product',
+        );
       }
 
       const getProduct = await this.productsRepository.getProductBySku(skuId);
@@ -118,7 +148,10 @@ export class ProductsService {
         throw new BusinessException('4040', 'Product not found');
       }
 
-      const deleteProduct = await this.productsRepository.deleteProductBySku(skuId,authUser);
+      const deleteProduct = await this.productsRepository.deleteProductBySku(
+        skuId,
+        authUser,
+      );
 
       if (!deleteProduct) {
         throw new BusinessException('4012', 'Failed to delete product');
@@ -283,38 +316,72 @@ export class ProductsService {
   }
 
   async getListProducts(dto: getProductListDto, pagination: PaginationQuery) {
-
     const { page, limit, skip } = getPagination(pagination);
-      const getProducts = await this.productsRepository.getListProducts(dto, { page, limit, skip });
-      return {
-        page: getProducts.page,
-        limit: getProducts.limit,
-        total: getProducts.total,
-        totalPages: getProducts.totalPages,
-        products: getProducts.data,
-      }; 
+    const getProducts = await this.productsRepository.getListProducts(dto, {
+      page,
+      limit,
+      skip,
+    });
+    return {
+      page: getProducts.page,
+      limit: getProducts.limit,
+      total: getProducts.total,
+      totalPages: getProducts.totalPages,
+      products: getProducts.data,
+    };
+  }
+  catch(error) {
+    console.error(
+      `Error getting list products: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
+    throw error;
+  }
 
-    } catch (error) {
-      console.error(
-        `Error getting list products: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      throw error;
-    }
-
-  async getProductDetail(sku: string) {
+  async getProductDetail(sku: string): Promise<IProductDetailResponse> {
     try {
-      const getProduct = await this.productsRepository.getProductBySku(sku);
-      if (!getProduct) {
+      const product = await this.productsRepository.getProductBySku(sku);
+
+      if (!product) {
         throw new BusinessException('4040', 'Product not found');
       }
-      return getProduct;
+      const stock = await this.stockManagementService.getStockDetail(
+        product.id,
+      );
+
+      return {
+        product: {
+          ...product,
+        },
+        stockInfo: stock
+          ? {
+              ...stock,
+              id: stock.id?.toString(),
+            }
+          : null,
+      };
     } catch (error) {
       console.error(
-        `Error getting product detail: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error getting product detail: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
       );
+
       throw error;
     }
   }
+
+  private buildCreateStock(
+    request: stockRequestDto,
+    productId: string,
+    sku: string,
+  ): CreateStockDto {
+    return {
+      productId,
+      sku,
+      warehouseId: undefined,
+      quantity: request.quantity,
+      reserved: request.reserved,
+      minStock: request.minStock,
+    };
+  }
 }
-
-

@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { FilterQuery, Model } from 'mongoose';
+import { ClientSession, FilterQuery, Model } from 'mongoose';
 import { ProductsEntity } from './products.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import {
   createProductDto,
   getProductListDto,
   updateProductDto,
-} from 'src/routes/stock-products/products.dto';
+} from 'src/routes/products/products.dto';
 import { AuthUser } from 'src/types/user.type';
+import {
+  ICreateProductResponse,
+  IProduct,
+} from 'src/routes/products/interfaces/products.interface';
+import { mapMongoId } from 'src/common/helper/mongo.helper';
 
 @Injectable()
 export class ProductsRepository {
@@ -16,37 +21,48 @@ export class ProductsRepository {
     private readonly productsEntity: Model<ProductsEntity>,
   ) {}
 
-  async getProductBySku(sku: string) {
-    const query: FilterQuery<ProductsEntity> = { sku: sku };
-    return await this.productsEntity.findOne(query);
+  async startSession(): Promise<ClientSession> {
+    return this.productsEntity.db.startSession();
+  }
+
+  async getProductBySku(sku: string): Promise<IProduct | null> {
+    const product = await this.productsEntity.findOne({ sku:sku }).lean().exec();
+
+    if (!product) {
+      return null;
+    }
+    return mapMongoId(product);
   }
 
   async createProduct(
     key: string,
     productData: createProductDto,
     user: AuthUser,
-  ): Promise<boolean> {
+    session?: ClientSession,
+  ): Promise<ICreateProductResponse | undefined> {
     try {
-      await this.productsEntity.create({
-        sku: key,
-        name: productData.name,
-        description: productData.description,
-        categoryId: productData.categoryId,
-        categoryPath: productData.categoryPath,
-        brandId: productData.brandId,
-        vehicles: productData.vehicles,
-        price: productData.price,
-        spec: productData.spec,
-        media: productData.images,
-        status: productData.status,
-        isDeleted: false,
-        createdBy: user.publicId,
-        createdDt: new Date(),
-      });
-      return true;
+      const [created] = await this.productsEntity.create(
+        [
+          {
+            ...productData,
+            sku: key,
+            media: productData.images,
+            isDeleted: false,
+            createdBy: user.publicId,
+            createdDt: new Date(),
+            updatedBy: user.publicId,
+            updatedDt: new Date(),
+          },
+        ],
+        {
+          session,
+        },
+      );
+
+      return mapMongoId(created.toObject());
     } catch (error) {
       console.error('Error created product', error);
-      return false;
+      throw error;
     }
   }
 
@@ -98,30 +114,27 @@ export class ProductsRepository {
       data,
     };
   }
-  
-  async deleteProductBySku(
-  sku: string,
-  authUser: AuthUser,
-): Promise<boolean> {
-  try {
-    const result = await this.productsEntity.updateOne(
-      {
-        sku,
-        isDeleted: { $ne: true },
-      },
-      {
-        $set: {
-          isDeleted: true,
-          deletedDt: new Date(),
-          deletedBy: authUser.publicId,
-        },
-      },
-    );
 
-    return result.modifiedCount > 0;
-  } catch (error) {
-    console.error('Error deleting product', error);
-    return false;
+  async deleteProductBySku(sku: string, authUser: AuthUser): Promise<boolean> {
+    try {
+      const result = await this.productsEntity.updateOne(
+        {
+          sku,
+          isDeleted: { $ne: true },
+        },
+        {
+          $set: {
+            isDeleted: true,
+            deletedDt: new Date(),
+            deletedBy: authUser.publicId,
+          },
+        },
+      );
+
+      return result.modifiedCount > 0;
+    } catch (error) {
+      console.error('Error deleting product', error);
+      return false;
+    }
   }
-}
 }
